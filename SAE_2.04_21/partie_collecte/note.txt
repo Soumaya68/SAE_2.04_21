@@ -1,0 +1,26 @@
+
+1. Tu vas sur ton serveur mariadb
+et tu créer : CREATE DATABASE maison;
+
+2. SUr la VM qui lancera le script mqtt tu fais :
+sudo apt update
+sudo apt install libmariadb-dev
+sudo apt install pkg-config
+sudo apt install default-libmysqlclient-dev build-essential python3-dev
+
+3. Tu lances le script premier script base_de_donne_init.py qui créer les tables mariadb
+
+4. Tu lances le script mqtt_listener
+
+5. Tu changes les settings dans le django avec la bonne IP de la BDD
+
+6. Tu fais un runserver et si besoin gunicorn NGINX (serveur web)
+
+ATTENTIOn VERIFIE les identifiants de ta base de donnée dans les script si ca foncitonne pas
+
+DANS LE DJANGO NE PAS FAIRE 
+
+python manage.py makemigrations
+python manage.py migrate
+
+SINON CA RE CREER LES tables
