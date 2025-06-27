@@ -1,34 +1,264 @@
+{% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <!-- Bootstrap CSS CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-<div class="container py-4">
-    <h1 class="mb-4">Liste des capteurs et leurs données</h1>
+    <title>SAE 2.04 - Dashboard Capteurs IoT</title>
 
-    {% for capteur in capteurs %}
-        <div class="card mb-3">
-            <div class="card-header">
-                <h2 class="h5 mb-0">{{ capteur.nom }} <small class="text-muted">({{ capteur.lieu }} - {{ capteur.emplacement }})</small></h2>
+    <!-- Font Awesome pour les icônes -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js pour les graphiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- CSS personnalisé -->
+    <link rel="stylesheet" href="{% static 'partie_web_app/css/dashboard.css' %}">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-thermometer-half"></i>
+                <div>
+                    <h1>SAE 2.04 - Dashboard IoT</h1>
+                    <div class="subtitle">Système de monitoring des capteurs de température</div>
+                </div>
             </div>
-            <ul class="list-group list-group-flush">
-                {% for data in capteur.data_set.all %}
-                    <li class="list-group-item">
-                        <span class="fw-bold">{{ data.datetime }}</span> — {{ data.temperature }}°C
-                    </li>
-                {% empty %}
-                    <li class="list-group-item text-muted">Aucune donnée</li>
-                {% endfor %}
-            </ul>
         </div>
-    {% endfor %}
-</div>
-<!-- Bootstrap JS (optional, for interactive components) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    </header>
+
+    <div class="container">
+        <!-- Section des filtres -->
+        <section class="filters-section animate-fade-in">
+            <h2 class="filters-title">
+                <i class="fas fa-filter"></i>
+                Filtres et recherche
+            </h2>
+
+            <form method="GET" id="filterForm">
+                <div class="filters-grid">
+                    <div class="form-group">
+                        <label for="capteur-select">Capteur</label>
+                        <select id="capteur-select" name="capteur" class="form-control">
+                            <option value="">Tous les capteurs</option>
+                            {% for capteur in capteurs %}
+                            <option value="{{ capteur.capteur_id }}">{{ capteur.nom }} ({{ capteur.lieu }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="date-debut">Date de début</label>
+                        <input type="datetime-local" id="date-debut" name="date_debut" class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="date-fin">Date de fin</label>
+                        <input type="datetime-local" id="date-fin" name="date_fin" class="form-control">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="temp-min">Température min (°C)</label>
+                        <input type="number" id="temp-min" name="temp_min" class="form-control" step="0.1">
+                    </div>
+                </div>
+
+                <div class="filters-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i>
+                        Rechercher
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="resetFilters()">
+                        <i class="fas fa-refresh"></i>
+                        Réinitialiser
+                    </button>
+                    <button type="button" class="btn btn-warning" onclick="exportCSV()">
+                        <i class="fas fa-download"></i>
+                        Export CSV
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="toggleAutoRefresh()">
+                        <i class="fas fa-sync" id="refresh-icon"></i>
+                        Auto-refresh
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Section des statistiques -->
+        <section class="stats-section animate-fade-in">
+            <div class="stat-card">
+                <div class="stat-icon" style="color: var(--secondary-color);">
+                    <i class="fas fa-thermometer-three-quarters"></i>
+                </div>
+                <div class="stat-value" style="color: var(--secondary-color);">{{ total_capteurs|default:0 }}</div>
+                <div class="stat-label">Capteurs actifs</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon" style="color: var(--success-color);">
+                    <i class="fas fa-database"></i>
+                </div>
+                <div class="stat-value" style="color: var(--success-color);">{{ total_mesures|default:0 }}</div>
+                <div class="stat-label">Mesures enregistrées</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon" style="color: var(--warning-color);">
+                    <i class="fas fa-temperature-high"></i>
+                </div>
+                <div class="stat-value" style="color: var(--warning-color);">{{ temp_moyenne|default:"--" }}°C</div>
+                <div class="stat-label">Température moyenne</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon" style="color: var(--accent-color);">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-value" style="color: var(--accent-color);">{{ derniere_mesure|default:"--" }}</div>
+                <div class="stat-label">Dernière mesure</div>
+            </div>
+        </section>
+
+        <!-- Section du tableau des données -->
+        <section class="data-section animate-fade-in">
+            <div class="section-header">
+                <div class="section-title">
+                    <h2>
+                        <i class="fas fa-table"></i>
+                        Données des capteurs
+                    </h2>
+                    <div>
+                        <span class="badge">
+                            {{ donnees|length }} résultat(s)
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th><i class="fas fa-id-card"></i> ID</th>
+                            <th><i class="fas fa-tag"></i> Nom</th>
+                            <th><i class="fas fa-map-marker-alt"></i> Lieu</th>
+                            <th><i class="fas fa-location-arrow"></i> Emplacement</th>
+                            <th><i class="fas fa-calendar"></i> Date/Heure</th>
+                            <th><i class="fas fa-thermometer-half"></i> Température</th>
+                            <th><i class="fas fa-cogs"></i> Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for capteur in capteurs %}
+                            {% for data in capteur.data_set.all %}
+                            <tr>
+                                <td>{{ capteur.capteur_id }}</td>
+                                <td><strong>{{ capteur.nom }}</strong></td>
+                                <td>{{ capteur.lieu }}</td>
+                                <td>{{ capteur.emplacement }}</td>
+                                <td>{{ data.datetime|date:"d/m/Y H:i" }}</td>
+                                <td>
+                                    <span class="temperature {% if data.temperature > 25 %}temp-high{% elif data.temperature < 15 %}temp-low{% else %}temp-normal{% endif %}">
+                                        {{ data.temperature }}°C
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-primary btn-sm" onclick="editCapteur({{ capteur.capteur_id }})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="no-data">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    Aucune donnée disponible
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="no-data">
+                                <i class="fas fa-search"></i>
+                                Aucun capteur trouvé
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Section des graphiques -->
+        <section class="charts-section animate-fade-in">
+            <div class="chart-card">
+                <h3 class="chart-title">
+                    <i class="fas fa-chart-line"></i>
+                    Évolution des températures
+                </h3>
+                <canvas id="temperatureChart"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3 class="chart-title">
+                    <i class="fas fa-chart-pie"></i>
+                    Répartition par capteur
+                </h3>
+                <canvas id="sensorChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Actions rapides -->
+        <section class="quick-actions animate-fade-in">
+            <h2 class="filters-title">
+                <i class="fas fa-bolt"></i>
+                Actions rapides
+            </h2>
+
+            <div class="actions-grid">
+                <div class="action-card" onclick="addCapteur()">
+                    <div class="action-icon">
+                        <i class="fas fa-plus-circle"></i>
+                    </div>
+                    <h4>Ajouter un capteur</h4>
+                    <p>Enregistrer un nouveau capteur</p>
+                </div>
+
+                <div class="action-card" onclick="viewReport()">
+                    <div class="action-icon">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <h4>Rapport détaillé</h4>
+                    <p>Générer un rapport complet</p>
+                </div>
+
+                <div class="action-card" onclick="manageAlerts()">
+                    <div class="action-icon">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <h4>Gérer les alertes</h4>
+                    <p>Configurer les seuils d'alerte</p>
+                </div>
+
+                <div class="action-card" onclick="exportData()">
+                    <div class="action-icon">
+                        <i class="fas fa-file-export"></i>
+                    </div>
+                    <h4>Exporter les données</h4>
+                    <p>Télécharger au format CSV/Excel</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 SAE 2.04 - Groupe 21 | Système de monitoring IoT</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="{% static 'partie_web_app/js/dashboard.js' %}"></script>
 </body>
 </html>

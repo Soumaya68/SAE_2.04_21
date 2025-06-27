@@ -78,9 +78,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'maison',
-        'USER': 'root',
-        'PASSWORD': 'toto',
-        'HOST': '172.17.0.2',
+        'USER': 'imene2',
+        'PASSWORD': 'mdpfort',
+        'HOST': '127.0.0.1',
         'PORT': '3306',
     }
 }
@@ -122,7 +122,16 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Dossier pour les fichiers statiques en développement
+STATICFILES_DIRS = [
+    BASE_DIR / "partie_web_app" / "static",
+]
+
+# Dossier pour les fichiers statiques en production
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
